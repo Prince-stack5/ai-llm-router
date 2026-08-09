@@ -44,7 +44,7 @@ LOCAL_API_URL = "http://127.0.0.1:8000/api/v1/chat"
 @st.cache_data(ttl=2)
 def detect_execution_mode():
     try:
-        response = requests.get("http://127.0.0.1:8000/", timeout=0.3)
+        response = requests.get("http://127.0.0.1:8000/", timeout=2.0)
         if response.status_code == 200:
             return "api_local", LOCAL_API_URL, "Local API Server", "🟢"
     except requests.RequestException:
