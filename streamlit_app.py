@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="AI LLM Router",
     page_icon="🤖",
     layout="centered",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ============================================================
@@ -41,7 +41,7 @@ except Exception as e:
     HAS_LOCAL_ROUTER = False
 
 # ============================================================
-# DYNAMIC SIDEBAR CONFIGURATION & API OVERRIDES
+# DYNAMIC CONNECTION CONFIGURATION
 # ============================================================
 import sys
 
@@ -52,14 +52,8 @@ try:
 except Exception:
     pass
 
-# Initialize session state for overrides
-if "override_key_a" not in st.session_state:
-    st.session_state.override_key_a = ""
-if "override_key_b" not in st.session_state:
-    st.session_state.override_key_b = ""
-
-# Sidebar config section
-st.sidebar.markdown("### 🔌 Connection & Keys")
+# Sidebar connection section
+st.sidebar.markdown("### 🔌 Connection Mode")
 
 mode_selection = st.sidebar.selectbox(
     "Execution Mode",
@@ -73,79 +67,8 @@ mode_selection = st.sidebar.selectbox(
     help="Auto-detect tries Local API Server first, then Standalone Mode if keys are available, and falls back to Render Cloud API."
 )
 
-key_a_input = ""
-key_b_input = ""
-
-if HAS_LOCAL_ROUTER:
-    with st.sidebar.expander("🔑 Local Provider Keys", expanded=True):
-        st.markdown(
-            "<small>Provide API keys to run the router locally on your machine instead of using the remote Render API.</small>",
-            unsafe_allow_html=True
-        )
-        
-        env_key_a = os.getenv("PROVIDER_A_API_KEY", "")
-        env_key_b = os.getenv("PROVIDER_B_API_KEY", "")
-        
-        placeholder_a = "Loaded (starts with AIzaSy...)" if env_key_a.startswith("AIzaSy") else ("Loaded from env" if env_key_a else "Enter Gemini API Key...")
-        placeholder_b = "Loaded (starts with gsk_...)" if env_key_b.startswith("gsk_") else ("Loaded from env" if env_key_b else "Enter Groq API Key...")
-        
-        if env_key_a and not env_key_a.startswith("AIzaSy"):
-            placeholder_a = "Env key invalid? Enter new Gemini API Key..."
-            
-        key_a_input = st.text_input(
-            "Google Gemini API Key",
-            value=st.session_state.override_key_a,
-            placeholder=placeholder_a,
-            type="password",
-            help="Starts with AIzaSy..."
-        )
-        
-        key_b_input = st.text_input(
-            "Groq Llama API Key",
-            value=st.session_state.override_key_b,
-            placeholder=placeholder_b,
-            type="password",
-            help="Starts with gsk_..."
-        )
-        
-        if key_a_input != st.session_state.override_key_a or key_b_input != st.session_state.override_key_b:
-            st.session_state.override_key_a = key_a_input
-            st.session_state.override_key_b = key_b_input
-            
-            # Clear cached standalone router/classifier to force re-initialization
-            if "standalone_router" in st.session_state:
-                del st.session_state.standalone_router
-            if "standalone_classifier" in st.session_state:
-                del st.session_state.standalone_classifier
-            st.rerun()
-
-# Apply overrides dynamically
-effective_key_a = key_a_input if key_a_input else os.getenv("PROVIDER_A_API_KEY", "")
-effective_key_b = key_b_input if key_b_input else os.getenv("PROVIDER_B_API_KEY", "")
-
-# Inform user if keys are invalid
-if HAS_LOCAL_ROUTER and (mode_selection == "Auto-detect" or mode_selection == "Standalone Mode (Local)"):
-    if effective_key_a and not effective_key_a.startswith("AIzaSy"):
-        st.sidebar.warning("⚠️ Local Gemini key should start with 'AIzaSy'. Check your credentials.")
-    if effective_key_b and not effective_key_b.startswith("gsk_"):
-        st.sidebar.warning("⚠️ Local Groq key should start with 'gsk_'. Check your credentials.")
-
-# Inject keys into active modules
-if effective_key_a:
-    os.environ["PROVIDER_A_API_KEY"] = effective_key_a
-    if "app.config.settings" in sys.modules:
-        sys.modules["app.config.settings"].PROVIDER_A_API_KEY = effective_key_a
-    if "app.providers.provider_a" in sys.modules:
-        sys.modules["app.providers.provider_a"].PROVIDER_A_API_KEY = effective_key_a
-    if "app.router.classifier" in sys.modules:
-        sys.modules["app.router.classifier"].PROVIDER_A_API_KEY = effective_key_a
-
-if effective_key_b:
-    os.environ["PROVIDER_B_API_KEY"] = effective_key_b
-    if "app.config.settings" in sys.modules:
-        sys.modules["app.config.settings"].PROVIDER_B_API_KEY = effective_key_b
-    if "app.providers.provider_b" in sys.modules:
-        sys.modules["app.providers.provider_b"].PROVIDER_B_API_KEY = effective_key_b
+effective_key_a = os.getenv("PROVIDER_A_API_KEY", "")
+effective_key_b = os.getenv("PROVIDER_B_API_KEY", "")
 
 # Resolve connection & execution parameters
 LOCAL_API_URL = "http://127.0.0.1:8000/api/v1/chat"
@@ -185,10 +108,10 @@ if exec_mode == "standalone" and "standalone_router" not in st.session_state:
         for key in ["PROVIDER_A_API_KEY", "PROVIDER_B_API_KEY", "PROVIDER_A_MODEL", "PROVIDER_B_MODEL", "CLASSIFIER_MODEL"]:
             if key in st.secrets:
                 os.environ[key] = st.secrets[key]
-                if key == "PROVIDER_A_API_KEY" and not key_a_input:
+                if key == "PROVIDER_A_API_KEY":
                     if "app.config.settings" in sys.modules:
                         sys.modules["app.config.settings"].PROVIDER_A_API_KEY = st.secrets[key]
-                elif key == "PROVIDER_B_API_KEY" and not key_b_input:
+                elif key == "PROVIDER_B_API_KEY":
                     if "app.config.settings" in sys.modules:
                         sys.modules["app.config.settings"].PROVIDER_B_API_KEY = st.secrets[key]
                         
@@ -484,14 +407,4 @@ if prompt := st.chat_input("Ask me anything..."):
                     "policy_forced": policy_forced
                 })
             except Exception as e:
-                error_msg = str(e)
-                st.error(f"⚠️ **Error executing routing:** {error_msg}")
-                
-                # Show helpful troubleshooting tips if it is an authentication issue
-                if any(x in error_msg.lower() for x in ["401", "unauthenticated", "invalid_api_key", "invalid api key"]):
-                    st.info(
-                        "💡 **Authentication Troubleshooting Tips:**\n\n"
-                        "1. **Check your API Keys:** The local API keys provided (in `.env` or in the sidebar) appear to be invalid or unauthenticated.\n"
-                        "2. **Use Sidebar Overrides:** Expand **🔑 Local Provider Keys** in the sidebar and paste valid keys directly.\n"
-                        "3. **Switch to Render Cloud API:** If you do not have local keys, change the **Execution Mode** in the sidebar to **Render Cloud API (Remote)**, which uses a pre-configured remote server."
-                    )
+                st.error("⚠️ **Routing Execution Failed.** Please verify that your API keys are configured correctly in the environment secrets of your hosting platform (Streamlit Cloud or Render).")
