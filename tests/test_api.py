@@ -100,3 +100,38 @@ def test_missing_query():
     )
 
     assert response.status_code == 422
+
+
+def test_chat_manual_override(monkeypatch):
+
+    monkeypatch.setattr(
+        classifier,
+        "classify",
+        fake_classify
+    )
+
+    monkeypatch.setattr(
+        llm_router.providers["provider_b"],
+        "generate",
+        fake_generate
+    )
+
+    # Force provider_b despite "python" in query
+    response = client.post(
+        "/api/v1/chat",
+        json={
+            "query": "Write Python code",
+            "provider": "provider_b"
+        }
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["provider"] == "provider_b"
+    assert "metrics" in data
+    assert "classification_latency" in data["metrics"]
+    assert "generation_latency" in data["metrics"]
+    assert "total_latency" in data["metrics"]
+    assert "model" in data

@@ -18,6 +18,7 @@ class ProviderB(LLMProvider):
         self.client = Groq(
             api_key=PROVIDER_B_API_KEY
         )
+        self.model_name = PROVIDER_B_MODEL
 
     async def generate(self, query: str) -> str:
         response = self.client.chat.completions.create(

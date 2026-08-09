@@ -6,6 +6,7 @@ from app.config.settings import (
 )
 from app.providers.base import LLMProvider
 
+
 class ProviderA(LLMProvider):
 
     def __init__(self):
@@ -15,11 +16,17 @@ class ProviderA(LLMProvider):
         self.client = genai.Client(
             api_key=PROVIDER_A_API_KEY
         )
+        self.model_name = PROVIDER_A_MODEL
 
     async def generate(self, query: str) -> str:
-        response = self.client.models.generate_content(
-          model=PROVIDER_A_MODEL,
-            contents=query,
-        )
+        try:
+            response = self.client.models.generate_content(
+                model=PROVIDER_A_MODEL,
+                contents=query,
+            )
 
-        return response.text
+            return response.text or "No response received."
+
+        except Exception as e:
+            print(f"Provider A error: {e}")
+            raise e
