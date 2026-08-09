@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
 import time
 
 from app.router.classifier import QueryClassifier
 from app.router.router import LLMRouter
+from app.services.google_sheets import sheets_logger
 
 
 router = APIRouter()
@@ -19,7 +20,7 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 
     if not request.query.strip():
         raise HTTPException(
@@ -88,6 +89,16 @@ async def chat(request: ChatRequest):
             )
 
     total_latency = time.perf_counter() - start_time
+
+    # Log to Google Sheets in background
+    background_tasks.add_task(
+        sheets_logger.log_query,
+        prompt=request.query,
+        category=task,
+        confidence=confidence,
+        provider=provider_name,
+        model=actual_model
+    )
 
     return {
         "query": request.query,

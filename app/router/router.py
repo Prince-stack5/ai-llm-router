@@ -14,6 +14,24 @@ class LLMRouter:
     def select_provider(self, task: str) -> tuple[str, LLMProvider]:
 
         provider_map = {
+            # New Capitalized categories
+            "Coding": "provider_a",
+            "Mathematics": "provider_a",
+            "Reasoning": "provider_b",
+            "Translation": "provider_b",
+            "Summarization": "provider_a",
+            "Email Writing": "provider_b",
+            "Creative Writing": "provider_b",
+            "General Knowledge": "provider_a",
+            "Explanation / Education": "provider_a",
+            "Analysis": "provider_a",
+            "Data / SQL": "provider_a",
+            "Web / Research": "provider_a",
+            "Planning": "provider_b",
+            "Conversation": "provider_b",
+            "Document / Content Generation": "provider_a",
+            
+            # Legacy lowercase categories (fallback)
             "coding": "provider_a",
             "summarization": "provider_a",
             "writing": "provider_b",

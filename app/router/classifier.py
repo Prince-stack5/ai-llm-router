@@ -2,6 +2,8 @@ import json
 from typing import Literal
 
 from google import genai
+from google.genai import types
+from pydantic import BaseModel, Field
 
 from app.config.settings import (
     PROVIDER_A_API_KEY,
@@ -9,14 +11,46 @@ from app.config.settings import (
 )
 
 
+class ClassificationResult(BaseModel):
+    category: str = Field(description="The predicted category of the user query.")
+    confidence: float = Field(description="The confidence score between 0.0 and 1.0.")
+
+
 TaskType = Literal[
-    "coding",
-    "writing",
-    "summarization",
-    "translation",
-    "reasoning",
-    "general",
+    "Coding",
+    "Mathematics",
+    "Reasoning",
+    "Translation",
+    "Summarization",
+    "Email Writing",
+    "Creative Writing",
+    "General Knowledge",
+    "Explanation / Education",
+    "Analysis",
+    "Data / SQL",
+    "Web / Research",
+    "Planning",
+    "Conversation",
+    "Document / Content Generation",
 ]
+
+VALID_CATEGORIES = {
+    "Coding": "Coding",
+    "Mathematics": "Mathematics",
+    "Reasoning": "Reasoning",
+    "Translation": "Translation",
+    "Summarization": "Summarization",
+    "Email Writing": "Email Writing",
+    "Creative Writing": "Creative Writing",
+    "General Knowledge": "General Knowledge",
+    "Explanation / Education": "Explanation / Education",
+    "Analysis": "Analysis",
+    "Data / SQL": "Data / SQL",
+    "Web / Research": "Web / Research",
+    "Planning": "Planning",
+    "Conversation": "Conversation",
+    "Document / Content Generation": "Document / Content Generation",
+}
 
 
 class QueryClassifier:
@@ -38,41 +72,73 @@ You are an API routing classifier.
 
 Classify the user's request into exactly ONE of these categories:
 
-- coding
-- writing
-- summarization
-- translation
-- reasoning
-- general
+- Coding
+- Mathematics
+- Reasoning
+- Translation
+- Summarization
+- Email Writing
+- Creative Writing
+- General Knowledge
+- Explanation / Education
+- Analysis
+- Data / SQL
+- Web / Research
+- Planning
+- Conversation
+- Document / Content Generation
 
 Definitions:
 
-coding:
-Programming, debugging, software development,
-algorithms, databases, APIs, or technical implementation.
+Coding:
+Programming, debugging, software development, algorithms, APIs, or technical implementation.
 
-writing:
-Emails, essays, stories, articles, captions,
-rewriting, professional communication, or creative writing.
+Mathematics:
+Solving math problems, equations, calculus, algebra, numerical reasoning.
 
-summarization:
-Summarizing, shortening, extracting key points,
-or condensing existing information.
+Reasoning:
+Logical reasoning, puzzles, multi-step problem solving, deduction, or complex analysis.
 
-translation:
+Translation:
 Translating text from one language to another.
 
-reasoning:
-Analysis, comparison, problem solving,
-decision making, explanations, or logical reasoning.
+Summarization:
+Summarizing, shortening, extracting key points, or condensing existing information.
 
-general:
-Anything that doesn't clearly fit the categories above.
+Email Writing:
+Drafting emails, letters, professional communications, out-of-office replies.
+
+Creative Writing:
+Poetry, stories, plays, scripts, marketing copy, brainstorming ideas.
+
+General Knowledge:
+Trivia, historical facts, scientific questions, general informational queries.
+
+Explanation / Education:
+Explaining concepts, teaching, tutorials, "how does X work" type queries.
+
+Analysis:
+Comparing options, analyzing data, summarizing research findings, trade-off analysis.
+
+Data / SQL:
+Writing SQL queries, database schema design, formatting JSON/CSV data.
+
+Web / Research:
+Searching the web, finding sources, reviewing current events.
+
+Planning:
+Creating itineraries, schedules, project plans, task lists.
+
+Conversation:
+General chitchat, greeting, friendly dialog, basic interaction.
+
+Document / Content Generation:
+Creating long-form documents, reports, essays, outlines, templates.
 
 Return ONLY valid JSON:
 
 {{
-    "category": "coding",
+    "category": "Coding",
     "confidence": 0.95
 }}
 
@@ -81,17 +147,28 @@ User query:
 {query}
 """
 
-        response = self.client.models.generate_content(
-           model=CLASSIFIER_MODEL,
-            contents=prompt,
-        )
-
         try:
-            result = json.loads(response.text)
+            response = self.client.models.generate_content(
+                model=CLASSIFIER_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ClassificationResult,
+                )
+            )
+
+            res_text = ""
+            if hasattr(response, 'text') and response.text:
+                res_text = response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                parts = response.candidates[0].content.parts
+                res_text = "".join([part.text for part in parts if hasattr(part, 'text') and part.text])
+
+            result = json.loads(res_text)
 
             category = result.get(
                 "category",
-                "general"
+                "General Knowledge"
             )
 
             confidence = float(
@@ -101,17 +178,23 @@ User query:
                 )
             )
 
-            valid_categories = {
-                "coding",
-                "writing",
-                "summarization",
-                "translation",
-                "reasoning",
-                "general",
+            # Case-insensitive lookup mapping
+            lookup = {k.lower(): v for k, v in VALID_CATEGORIES.items()}
+            
+            # Map legacy or approximate categories
+            legacy_mappings = {
+                "writing": "Creative Writing",
+                "general": "General Knowledge",
+                "math": "Mathematics"
             }
-
-            if category not in valid_categories:
-                category = "general"
+            
+            cleaned_category = category.strip().lower()
+            if cleaned_category in lookup:
+                category = lookup[cleaned_category]
+            elif cleaned_category in legacy_mappings:
+                category = legacy_mappings[cleaned_category]
+            else:
+                category = "General Knowledge"
 
             confidence = max(
                 0.0,
@@ -122,4 +205,4 @@ User query:
 
         except (json.JSONDecodeError, ValueError, TypeError):
 
-            return "general", 0.0
+            return "General Knowledge", 0.0

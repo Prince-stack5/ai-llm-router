@@ -20,6 +20,7 @@ st.set_page_config(
 try:
     from app.router.classifier import QueryClassifier
     from app.router.router import LLMRouter
+    from app.services.google_sheets import sheets_logger
     import asyncio
     
     def run_async(coro):
@@ -275,6 +276,17 @@ async def execute_standalone_routing(q_text, prov_override):
             
     total_latency = time.perf_counter() - start_time
     
+    # Log to Google Sheets asynchronously in the background
+    asyncio.create_task(
+        sheets_logger.log_query(
+            prompt=q_text,
+            category=task,
+            confidence=confidence,
+            provider=provider_name,
+            model=actual_model
+        )
+    )
+    
     return {
         "query": q_text,
         "task": task,
@@ -312,7 +324,7 @@ if prompt := st.chat_input("Ask me anything..."):
                         "query": prompt,
                         "provider": provider_param
                     }
-                    response = requests.post(api_url, json=payload, timeout=30)
+                    response = requests.post(api_url, json=payload, timeout=60)
                     if response.status_code == 200:
                         data = response.json()
                     else:
