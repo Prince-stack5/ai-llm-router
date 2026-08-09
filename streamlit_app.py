@@ -52,21 +52,7 @@ try:
 except Exception:
     pass
 
-# Sidebar connection section
-st.sidebar.markdown("### 🔌 Connection Mode")
-
-mode_selection = st.sidebar.selectbox(
-    "Execution Mode",
-    [
-        "Auto-detect",
-        "Standalone Mode (Local)",
-        "Render Cloud API (Remote)",
-        "Local API Server"
-    ],
-    index=0,
-    help="Auto-detect tries Local API Server first, then Standalone Mode if keys are available, and falls back to Render Cloud API."
-)
-
+mode_selection = "Auto-detect"
 effective_key_a = os.getenv("PROVIDER_A_API_KEY", "")
 effective_key_b = os.getenv("PROVIDER_B_API_KEY", "")
 
@@ -227,39 +213,7 @@ st.markdown(
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ============================================================
-# SIDEBAR FOR SETTINGS (KEEPING MAIN INTERFACE 100% CLEAN)
-# ============================================================
-with st.sidebar:
-    st.markdown("---")
-    st.markdown("### ⚙️ Policy Selection")
-    
-    # Override Policy
-    policy = st.selectbox(
-        "Routing Policy",
-        [
-            "Auto (Intelligent Routing)",
-            "Force Provider A (Google Gemini)",
-            "Force Provider B (Groq Llama)"
-        ],
-        index=0
-    )
-    
-    provider_param = "auto"
-    if "Force Provider A" in policy:
-        provider_param = "provider_a"
-    elif "Force Provider B" in policy:
-        provider_param = "provider_b"
-        
-    st.markdown("---")
-    st.markdown(f"**Engine:** {mode_label} {status_dot}")
-    if exec_mode != "standalone":
-         st.caption(f"Endpoint: {api_url}")
-         
-    st.markdown("---")
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
+provider_param = "auto"
 
 # ============================================================
 # MAIN USER INTERFACE
@@ -267,10 +221,17 @@ with st.sidebar:
 
 # App header
 st.markdown('<div class="app-title">🤖 AI LLM Router</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="app-desc">Welcome! I\'m your Intelligent LLM Router. Ask me anything, and I\'ll route your request to the best LLM provider (Gemini or Groq Llama) with automatic fallback protection!</div>',
-    unsafe_allow_html=True
-)
+
+col1, col2 = st.columns([6, 1.5])
+with col1:
+    st.markdown(
+        '<div class="app-desc">Welcome! I\'m your Intelligent LLM Router. Ask me anything, and I\'ll route your request to the best LLM provider (Gemini or Groq Llama) with automatic fallback protection!</div>',
+        unsafe_allow_html=True
+    )
+with col2:
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 # Render Chat History
 for msg in st.session_state.messages:
@@ -364,7 +325,20 @@ if prompt := st.chat_input("Ask me anything..."):
         with st.spinner("Routing..."):
             try:
                 if exec_mode == "standalone":
-                    data = run_async(execute_standalone_routing(prompt, provider_param))
+                    try:
+                        data = run_async(execute_standalone_routing(prompt, provider_param))
+                    except Exception as standalone_err:
+                        # Auto-fallback to Render Cloud API if standalone execution fails
+                        payload = {
+                            "query": prompt,
+                            "provider": provider_param
+                        }
+                        response = requests.post(REMOTE_API_URL, json=payload, timeout=60)
+                        if response.status_code == 200:
+                            data = response.json()
+                            data["fallback_used"] = True
+                        else:
+                            raise Exception(f"Local routing failed ({standalone_err}), and fallback to Render API failed: {response.text}")
                 else:
                     payload = {
                         "query": prompt,
