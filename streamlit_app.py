@@ -3,6 +3,10 @@ import requests
 from datetime import datetime
 import time
 import os
+from concurrent.futures import ThreadPoolExecutor
+
+# Thread pool for background tasks (e.g. logging to Google Sheets)
+executor = ThreadPoolExecutor(max_workers=3)
 
 # ============================================================
 # PAGE CONFIGURATION (CENTERED CHAT LAYOUT)
@@ -276,15 +280,14 @@ async def execute_standalone_routing(q_text, prov_override):
             
     total_latency = time.perf_counter() - start_time
     
-    # Log to Google Sheets asynchronously in the background
-    asyncio.create_task(
-        sheets_logger.log_query(
-            prompt=q_text,
-            category=task,
-            confidence=confidence,
-            provider=provider_name,
-            model=actual_model
-        )
+    # Log to Google Sheets asynchronously in the background using a persistent thread pool
+    executor.submit(
+        sheets_logger.log_query_sync,
+        prompt=q_text,
+        category=task,
+        confidence=confidence,
+        provider=provider_name,
+        model=actual_model
     )
     
     return {
