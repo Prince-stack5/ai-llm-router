@@ -228,24 +228,7 @@ st.markdown(
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
-        if msg["role"] == "assistant" and "task" in msg:
-            # Metadata row under assistant response
-            fb_badge = "<span class='routing-badge badge-rose'>Fallback</span>" if msg.get("fallback_used", False) else ""
-            override_badge = "<span class='routing-badge badge-amber'>Policy Forced</span>" if msg.get("policy_forced", False) else ""
-            
-            st.markdown(
-                f"""
-                <div style="margin-top: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-                    <span class="routing-badge badge-indigo">Routed: {msg['provider'].upper()}</span>
-                    <span class="routing-badge badge-indigo">Model: {msg['model']}</span>
-                    <span class="routing-badge badge-indigo">Task: {msg['task']}</span>
-                    <span class="routing-badge badge-indigo">Latency: {msg['latency']:.2f}s</span>
-                    {fb_badge}
-                    {override_badge}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+
 
 # ============================================================
 # RUN STANDALONE ROUTER LOGIC
@@ -352,22 +335,7 @@ if prompt := st.chat_input("Ask me anything..."):
                 fallback = data.get("fallback_used", False)
                 policy_forced = (provider_param != "auto")
                 
-                fb_badge = "<span class='routing-badge badge-rose'>Fallback</span>" if fallback else ""
-                override_badge = "<span class='routing-badge badge-amber'>Policy Forced</span>" if policy_forced else ""
-                
-                st.markdown(
-                    f"""
-                    <div style="margin-top: 8px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
-                        <span class="routing-badge badge-indigo">Routed: {provider.upper()}</span>
-                        <span class="routing-badge badge-indigo">Model: {model}</span>
-                        <span class="routing-badge badge-indigo">Task: {task}</span>
-                        <span class="routing-badge badge-indigo">Latency: {latency:.2f}s</span>
-                        {fb_badge}
-                        {override_badge}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+
                 
                 # Add response to session state chat history
                 st.session_state.messages.append({
