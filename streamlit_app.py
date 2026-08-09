@@ -15,7 +15,7 @@ st.set_page_config(
     page_title="AI LLM Router",
     page_icon="🤖",
     layout="centered",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ============================================================
@@ -292,7 +292,7 @@ st.markdown(
         /* Hide streamlit default branding */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
-        header {visibility: hidden;}
+        header {background-color: transparent !important;}
     </style>
     """,
     unsafe_allow_html=True,
