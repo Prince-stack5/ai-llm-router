@@ -1,8 +1,28 @@
+import os
+import sys
 import streamlit as st
+
+# ============================================================
+# LOAD CONFIGURATION EARLY (BEFORE ANY IMPORT OF APP MODULES)
+# ============================================================
+# 1. Load secrets from st.secrets into os.environ for Streamlit Cloud
+try:
+    for key, val in st.secrets.items():
+        if isinstance(val, str):
+            os.environ[key] = val
+except Exception:
+    pass
+
+# 2. Load dotenv early for local environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 import requests
 from datetime import datetime
 import time
-import os
 from concurrent.futures import ThreadPoolExecutor
 
 # Thread pool for background tasks (e.g. logging to Google Sheets)
@@ -43,14 +63,7 @@ except Exception as e:
 # ============================================================
 # DYNAMIC CONNECTION CONFIGURATION
 # ============================================================
-import sys
 
-# Load dotenv early to read current local configuration
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
 
 mode_selection = "Auto-detect"
 effective_key_a = os.getenv("PROVIDER_A_API_KEY", "")
@@ -91,16 +104,6 @@ exec_mode, api_url, mode_label, status_dot = resolve_execution_mode(mode_selecti
 # Initialize direct components if running standalone
 if exec_mode == "standalone" and "standalone_router" not in st.session_state:
     try:
-        for key in ["PROVIDER_A_API_KEY", "PROVIDER_B_API_KEY", "PROVIDER_A_MODEL", "PROVIDER_B_MODEL", "CLASSIFIER_MODEL"]:
-            if key in st.secrets:
-                os.environ[key] = st.secrets[key]
-                if key == "PROVIDER_A_API_KEY":
-                    if "app.config.settings" in sys.modules:
-                        sys.modules["app.config.settings"].PROVIDER_A_API_KEY = st.secrets[key]
-                elif key == "PROVIDER_B_API_KEY":
-                    if "app.config.settings" in sys.modules:
-                        sys.modules["app.config.settings"].PROVIDER_B_API_KEY = st.secrets[key]
-                        
         st.session_state.standalone_router = LLMRouter()
         st.session_state.standalone_classifier = QueryClassifier()
     except Exception as e:
@@ -108,6 +111,7 @@ if exec_mode == "standalone" and "standalone_router" not in st.session_state:
         api_url = REMOTE_API_URL
         mode_label = "Render Cloud API (Failed Standalone Init)"
         status_dot = "🔴"
+
 
 # ============================================================
 # PREMIUM DARK MINIMALIST CHAT DESIGN (CUSTOM CSS)

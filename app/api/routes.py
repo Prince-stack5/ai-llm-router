@@ -114,3 +114,11 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
             "total_latency": round(total_latency, 3)
         }
     }
+
+
+@router.get("/status")
+async def get_status():
+    return {
+        "status": "online",
+        "sheets_logger": sheets_logger.get_status()
+    }

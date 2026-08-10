@@ -25,6 +25,8 @@ class GoogleSheetsLogger:
         self.sheet_id = GOOGLE_SHEET_ID
         self.client: Optional[gspread.Client] = None
         self._is_initialized = False
+        self.last_error: Optional[str] = None
+        self.auth_method: Optional[str] = None
 
     def _initialize_client(self):
         """
@@ -33,46 +35,89 @@ class GoogleSheetsLogger:
         if self._is_initialized:
             return
 
+        # Clean sheet_id from potential enclosing quotes
+        if self.sheet_id:
+            self.sheet_id = self.sheet_id.strip("'\" ")
+
         if not self.sheet_id:
-            logger.warning("GOOGLE_SHEET_ID is not configured. Google Sheets logging is disabled.")
+            self.last_error = "GOOGLE_SHEET_ID is not configured."
+            logger.warning(self.last_error)
             return
 
         try:
             # 1. Try to load credentials from JSON string
-            if GOOGLE_SHEETS_CREDENTIALS_JSON:
+            creds_json = GOOGLE_SHEETS_CREDENTIALS_JSON
+            if creds_json:
+                # Strip leading/trailing whitespace and single/double quotes that might be added by env parsers
+                creds_json = creds_json.strip()
+                if (creds_json.startswith("'") and creds_json.endswith("'")) or (creds_json.startswith('"') and creds_json.endswith('"')):
+                    creds_json = creds_json[1:-1].strip()
+
                 try:
-                    creds_info = json.loads(GOOGLE_SHEETS_CREDENTIALS_JSON)
+                    creds_info = json.loads(creds_json)
                     scopes = [
                         "https://www.googleapis.com/auth/spreadsheets",
                         "https://www.googleapis.com/auth/drive"
                     ]
                     creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
                     self.client = gspread.authorize(creds)
+                    self.auth_method = "JSON credentials"
                     logger.info("Authenticated with Google Sheets using JSON string credentials.")
                 except Exception as json_err:
-                    logger.error(f"Failed to load GOOGLE_SHEETS_CREDENTIALS_JSON: {json_err}")
+                    self.last_error = f"Failed to load GOOGLE_SHEETS_CREDENTIALS_JSON: {json_err}"
+                    logger.error(self.last_error)
 
             # 2. If not initialized, try to load from credentials file
             if not self.client and GOOGLE_SHEETS_CREDENTIALS_FILE:
+                file_path = GOOGLE_SHEETS_CREDENTIALS_FILE.strip("'\" ")
                 try:
-                    self.client = gspread.service_account(filename=GOOGLE_SHEETS_CREDENTIALS_FILE)
-                    logger.info(f"Authenticated with Google Sheets using file: {GOOGLE_SHEETS_CREDENTIALS_FILE}")
+                    self.client = gspread.service_account(filename=file_path)
+                    self.auth_method = "Credentials file"
+                    logger.info(f"Authenticated with Google Sheets using file: {file_path}")
                 except Exception as file_err:
-                    logger.error(f"Failed to authenticate with file {GOOGLE_SHEETS_CREDENTIALS_FILE}: {file_err}")
+                    self.last_error = f"Failed to authenticate with file {file_path}: {file_err}"
+                    logger.error(self.last_error)
 
             # 3. Fallback to default credentials if available
             if not self.client:
-                # We won't block startup if credentials are missing
-                logger.warning(
-                    "No Google Sheets credentials provided (neither GOOGLE_SHEETS_CREDENTIALS_JSON "
-                    "nor GOOGLE_SHEETS_CREDENTIALS_FILE). Google Sheets logging is disabled."
-                )
+                if not self.last_error:
+                    self.last_error = (
+                        "No Google Sheets credentials provided (neither GOOGLE_SHEETS_CREDENTIALS_JSON "
+                        "nor GOOGLE_SHEETS_CREDENTIALS_FILE)."
+                    )
+                logger.warning(self.last_error)
                 return
 
             self._is_initialized = True
+            self.last_error = None
 
         except Exception as e:
-            logger.error(f"Initialization of Google Sheets client failed: {e}")
+            self.last_error = f"Initialization of Google Sheets client failed: {e}"
+            logger.error(self.last_error)
+
+    def get_status(self) -> dict:
+        """
+        Returns the current configuration and connection status of the Google Sheets logger.
+        """
+        # Try initializing if not done already
+        if not self._is_initialized and not self.last_error:
+            self._initialize_client()
+            
+        sheet_url = None
+        if self.sheet_id:
+            # Strip any potential quotes just in case
+            clean_id = self.sheet_id.strip("'\" ")
+            sheet_url = f"https://docs.google.com/spreadsheets/d/{clean_id}/edit"
+
+        return {
+            "configured": bool(self.sheet_id),
+            "authenticated": self._is_initialized,
+            "auth_method": self.auth_method,
+            "sheet_id": self.sheet_id,
+            "sheet_url": sheet_url,
+            "error": self.last_error
+        }
+
 
     def log_query_sync(
         self,
