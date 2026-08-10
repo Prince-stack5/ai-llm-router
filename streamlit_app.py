@@ -328,6 +328,7 @@ if prompt := st.chat_input("Ask me anything..."):
     with st.chat_message("assistant"):
         with st.spinner("Routing..."):
             try:
+                should_log_in_main_loop = False
                 if exec_mode == "standalone":
                     try:
                         data = run_async(execute_standalone_routing(prompt, provider_param))
@@ -341,6 +342,7 @@ if prompt := st.chat_input("Ask me anything..."):
                         if response.status_code == 200:
                             data = response.json()
                             data["fallback_used"] = True
+                            should_log_in_main_loop = True
                         else:
                             raise Exception(f"Local routing failed ({standalone_err}), and fallback to Render API failed: {response.text}")
                 else:
@@ -351,6 +353,7 @@ if prompt := st.chat_input("Ask me anything..."):
                     response = requests.post(api_url, json=payload, timeout=60)
                     if response.status_code == 200:
                         data = response.json()
+                        should_log_in_main_loop = True
                     else:
                         raise Exception(f"API Error ({response.status_code}): {response.text}")
                 
@@ -371,7 +374,20 @@ if prompt := st.chat_input("Ask me anything..."):
                 fallback = data.get("fallback_used", False)
                 policy_forced = (provider_param != "auto")
                 
-
+                # Log to Google Sheets if the request was routed through the remote API
+                if should_log_in_main_loop:
+                    try:
+                        confidence = data.get("confidence", 0.5)
+                        executor.submit(
+                            sheets_logger.log_query_sync,
+                            prompt=prompt,
+                            category=task,
+                            confidence=confidence,
+                            provider=provider,
+                            model=model
+                        )
+                    except Exception:
+                        pass
                 
                 # Add response to session state chat history
                 st.session_state.messages.append({
