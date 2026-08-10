@@ -7,9 +7,14 @@ import streamlit as st
 # ============================================================
 # 1. Load secrets from st.secrets into os.environ for Streamlit Cloud
 try:
+    import json
     for key, val in st.secrets.items():
         if isinstance(val, str):
             os.environ[key] = val
+        elif isinstance(val, dict):
+            # If the user pasted service account info as a nested TOML table/dict,
+            # serialize it to a JSON string so gspread can read it from the env var.
+            os.environ[key] = json.dumps(val)
 except Exception:
     pass
 

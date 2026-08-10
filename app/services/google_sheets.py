@@ -55,6 +55,10 @@ class GoogleSheetsLogger:
 
                 try:
                     creds_info = json.loads(creds_json)
+                    # Fix private key formatting (replace literal \n with real newlines)
+                    if isinstance(creds_info, dict) and "private_key" in creds_info:
+                        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+
                     scopes = [
                         "https://www.googleapis.com/auth/spreadsheets",
                         "https://www.googleapis.com/auth/drive"
